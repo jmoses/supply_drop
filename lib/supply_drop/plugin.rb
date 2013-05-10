@@ -1,5 +1,12 @@
 module SupplyDrop
   module Plugin
+    def update
+      if fetch(:puppet_git_url, nil)
+        git
+      else
+        rsync
+      end
+    end
 
     def rsync
       SupplyDrop::Util.thread_pool_size = puppet_parallel_rsync_pool_size
@@ -21,6 +28,26 @@ module SupplyDrop
 
       raise "rsync failed on #{failed_servers.join(',')}" if failed_servers.any?
     end
+
+    def git
+      git_url = fetch(:puppet_git_url, nil)
+      git_user = fetch(:puppet_git_user, fetch(:user))
+
+      raise ArgumentError.new("puppet_git_url not defined") unless git_url
+
+      run "if grep '#{fetch :puppet_git_key}' ~#{git_user}/.ssh/known_hosts ; then true ; else #{sudo as: git_user} echo '#{fetch :puppet_git_key}' >> ~#{git_user}/.ssh/known_hosts ; fi"
+
+      clone_cmd = "#{sudo as: git_user} git clone #{git_url} #{fetch(:puppet_destination)}"
+      update_cmd = "cd #{fetch(:puppet_destination)} && #{sudo as: git_user} git fetch"
+      update_cmd +=  " && #{sudo as: git_user} git reset --hard origin/HEAD"
+
+      if git_user != fetch(:user)
+        run "chown -R #{git_user} #{fetch :puppet_destination}"
+      end
+
+      run "if [ ! -d #{fetch :puppet_destination}/.git ]; then #{clone_cmd}; else #{update_cmd}; fi"
+    end
+
 
     def prepare
       run "mkdir -p #{puppet_destination}"

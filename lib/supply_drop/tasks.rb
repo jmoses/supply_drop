@@ -75,7 +75,7 @@ Capistrano::Configuration.instance.load do
     desc "pushes the current puppet configuration to the server"
     task :update_code, :except => { :nopuppet => true } do
       syntax_check if puppet_syntax_check
-      supply_drop.rsync
+      supply_drop.update
     end
 
     desc "runs puppet with --noop flag to show changes"
